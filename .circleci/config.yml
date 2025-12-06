@@ -1,0 +1,119 @@
+version: 2.1
+
+jobs:
+  setup:
+    docker:
+      - image: circleci/node:latest
+    steps:
+      - checkout
+      - run:
+          name: Install Backend Dependencies
+          command: |
+            cd BACKEND
+            npm install
+
+  backend-tests:
+    docker:
+      - image: circleci/node:latest
+    steps:
+      - checkout
+      - run:
+          name: Clean node_modules
+          command: |
+            cd BACKEND
+            rm -rf node_modules
+      - run:
+          name: Install Backend Dependencies
+          command: |
+            cd BACKEND
+            npm install
+      - run:
+          name: Ensure Jest Binary Has Execute Permissions
+          command: |
+            cd BACKEND
+            if [ -f node_modules/.bin/jest ]; then chmod +x node_modules/.bin/jest; fi
+      - run:
+          name: Run Backend Tests
+          command: |
+            cd BACKEND
+            ./node_modules/.bin/jest --config jest.backend.config.cjs
+
+  frontend-tests:
+    docker:
+      - image: circleci/node:latest
+    steps:
+      - checkout
+      - run:
+          name: Install Frontend Dependencies
+          command: |
+            cd "FRONT END/frontend"
+            npm install
+      - run:
+          name: Ensure Jest Binary Has Execute Permissions
+          command: |
+            cd "FRONT END/frontend"
+            if [ -f node_modules/.bin/jest ]; then chmod +x node_modules/.bin/jest; fi
+      - run:
+          name: Run Frontend Login Tests
+          command: |
+            cd "FRONT END/frontend"
+            ./node_modules/.bin/jest --testPathPattern='FRONT END/frontend/tests/frontendLogin.test.js'
+      - run:
+          name: Run Frontend Register Tests
+          command: |
+            cd "FRONT END/frontend"
+            ./node_modules/.bin/jest --testPathPattern='FRONT END/frontend/tests/frontendRegister.test.js'
+      - run:
+          name: Run Frontend Payment Tests
+          command: |
+            cd "FRONT END/frontend"
+            npm run test -- --testPathPattern='FRONT END/frontend/tests/frontendPayment.test.js'
+      - run:
+          name: Run Frontend Employee Login Tests
+          command: |
+            cd "FRONT END/frontend"
+            ./node_modules/.bin/jest --testPathPattern='FRONT END/frontend/tests/frontendEmpLogin.test.js'
+
+  sonar-scan:
+    docker:
+      - image: sonarsource/sonar-scanner-cli:latest
+    environment:
+      SONAR_ORG: st10053561  # Organization key
+      SONAR_TOKEN: df586036a5ffa05d51604218a631ad6fc95bde7c  # Hardcoded token
+      SONAR_PROJECT_KEY: St10053561_APDS_POE  # Project key
+    steps:
+      - checkout
+      - run:
+          name: Debug Environment Variables
+          command: |
+            echo "SONAR_PROJECT_KEY: $SONAR_PROJECT_KEY"
+            echo "SONAR_ORG: $SONAR_ORG"
+            echo "CIRCLE_BRANCH: $CIRCLE_BRANCH"
+      - run:
+          name: Run SonarCloud Scan
+          command: |
+            sonar-scanner \
+              -Dsonar.projectKey=$SONAR_PROJECT_KEY \
+              -Dsonar.organization=$SONAR_ORG \
+              -Dsonar.login=$SONAR_TOKEN \
+              -Dsonar.sources="BACKEND,\"FRONT END/frontend/src\"" \
+              -Dsonar.c.file.suffixes=- \
+              -Dsonar.cpp.file.suffixes=- \
+              -Dsonar.objc.file.suffixes=-
+
+workflows:
+  version: 2
+  test-and-build:
+    jobs:
+      - setup
+      - backend-tests:
+          requires:
+            - setup
+      - frontend-tests:
+          requires:
+            - setup
+      - sonar-scan:
+          requires:
+            - backend-tests
+            - frontend-tests
+            
